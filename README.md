@@ -1,21 +1,23 @@
 # mrg_tool - Tsukihime Remake (Switch) Script Extractor & Repacker
 
-Tool Python untuk mengekstrak dan melakukan *repack* file `script_text.mrg` dari Tsukihime Remake (Nintendo Switch). Tool ini membaca format arsip MZP (`mrgd00`) dan mendukung encoding UTF-8 untuk mempermudah proses translasi visual novel.
+Tool untuk ekstrak dan repack file `script_text.mrg` game Tsukihime Remake (Nintendo Switch). Mendukung format arsip MZP (`mrgd00`) dan encoding UTF-8.
 
-**CATATAN PENTING:**
-Saat ini, teks yang diekstrak masih acak dan belum disortir. Baris dialog belum dibagi per rute. Jika proses penyortiran sudah selesai di masa mendatang, teks akan dikelompokkan ke dalam direktori masing-masing (contoh: rute Arcueid, rute Ciel, dst).
+**CATATAN:**
+Script yang diekstrak saat ini masih acak dan belum disortir per rute (Arcueid, Ciel, dll). Sortir manual atau update otomatis akan menyusul di masa mendatang.
 
-## Preview Terjemahan
+## Preview Hasil Terjemahan
 
-* **Sebelum (Original):** ![Sebelum](https://i.imgur.com/Fl6iTqW.png)
+* **Sebelum:** ![Sebelum](https://i.imgur.com/Fl6iTqW.png)
+* **Sesudah:** ![Sesudah](https://i.imgur.com/eEtdYFB.jpeg)
 
-* **Sesudah (Indonesia):** ![Sesudah](https://i.imgur.com/eEtdYFB.jpeg)
+## Preview Format Teks (.txt)
 
-## Cara Penggunaan
+Hasil ekstraksi akan berbentuk file teks terstruktur seperti ini:
+![Preview TXT](https://i.imgur.com/yALew5y.png)
 
-Pastikan kamu sudah menginstal Python 3. Tool ini tidak memerlukan *library* eksternal tambahan.
+## Cara Pakai
 
-### GUI Mode
-Cara paling mudah, jalankan skrip tanpa argumen untuk membuka tampilan antarmuka:
+### Mode GUI
+Jalankan langsung tanpa perintah tambahan:
 ```bash
 python mrg_tool.py
