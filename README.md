@@ -21,8 +21,8 @@ Kabar baik! Script teks hasil ekstraksi kini telah **berhasil disortir**. Kamu b
       <td align="center"><b>Sesudah (Indonesian Patch)</b></td>
     </tr>
     <tr>
-      <td><kbd><img src="https://i.imgur.com/Fl6iTqW.png" width="350"></kbd></td>
-      <td><kbd><img src="https://i.imgur.com/eEtdYFB.jpeg" width="350"></kbd></td>
+      <td><img src="https://i.imgur.com/Fl6iTqW.png" width="350"></td>
+      <td><img src="https://i.imgur.com/eEtdYFB.jpeg" width="350"></td>
     </tr>
   </table>
 </div>
