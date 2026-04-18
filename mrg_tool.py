@@ -15,6 +15,7 @@ Supports: UTF-8 — any language
 """
 
 import io
+import json
 import os
 import re
 import struct
@@ -95,37 +96,79 @@ class Mzp:
 # EXTRACT: MRG → TXT
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _load_scene_map():
+    """
+    Load scene_map.json (sits next to mrg_tool.py) and return:
+      offset_to_scene:  {int → (route, day, file)}
+      scene_tree:       {route → {day → [file, ...]}}  ordered
+      scene_offsets:    {(route, day, file) → [offsets]}
+    """
+    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scene_map.json")
+    if not os.path.exists(json_path):
+        return {}, {}, {}
+
+    with open(json_path, encoding="utf-8") as f:
+        raw = json.load(f)
+
+    import re as _re
+    offset_to_scene = {}
+    scene_offsets   = {}
+
+    for key, ranges in raw.items():
+        parts = key.split("|")
+        route = parts[0]
+        day   = parts[1] if len(parts) > 1 else ""
+        fname = parts[2] if len(parts) > 2 else ""
+        sk = (route, day, fname)
+        scene_offsets[sk] = []
+        for (start, end) in ranges:
+            for o in range(start, end + 1):
+                offset_to_scene[o] = sk
+                scene_offsets[sk].append(o)
+
+    ROUTE_ORDER = ["Common", "Arcueid", "Ciel", "QA"]
+
+    def day_key(d):
+        if not d:
+            return -1
+        m = _re.search(r"(\d+)", d)
+        return int(m.group(1)) if m else 999
+
+    scene_tree = {}
+    for sk in scene_offsets:
+        route, day, fname = sk
+        scene_tree.setdefault(route, {}).setdefault(day, []).append(fname)
+
+    for route in scene_tree:
+        for day in scene_tree[route]:
+            scene_tree[route][day].sort()
+        scene_tree[route] = dict(
+            sorted(scene_tree[route].items(), key=lambda x: day_key(x[0]))
+        )
+
+    ordered = {}
+    for r in ROUTE_ORDER:
+        if r in scene_tree:
+            ordered[r] = scene_tree[r]
+
+    return offset_to_scene, ordered, scene_offsets
+
+
 def extract_mrg(mrg_path, txt_path, progress_cb=None):
     """
-    Extract all strings from script_text.mrg into a structured .txt file.
+    Extract all strings from script_text.mrg into a structured .txt file,
+    organised by Route → Day → Scene (uses scene_map.json if available,
+    otherwise falls back to sequential order).
 
-    Format of the output:
-        # MRG Script Text
-        # Source: script_text.mrg
-        # Total: 43959
-        # ──────────────────────────────────────────
-        # EDITING GUIDE
-        #   • Edit lines between [OFFSET:N] and the next [OFFSET:M]
-        #   • Do NOT add or remove [OFFSET:N] headers
-        #   • Keep '#' characters inside strings (game line-break marker)
-        #   • Supports any Unicode (UTF-8)
-        # ──────────────────────────────────────────
-
-        [OFFSET:0]
-        　誰も彼も眠った頃…
-
-        [OFFSET:1]
-        　くらい夜。
+    [OFFSET:N] markers are preserved for round-trip repacking.
+    All comment lines (# …) are ignored during repack.
     """
     if progress_cb:
         progress_cb(0, "Reading MRG file…")
 
     mzp = Mzp(path=mrg_path)
-
-    offsets_raw = mzp.data[0]   # entry 0 = offset table (BE uint32 array)
-    strings_raw = mzp.data[1]   # entry 1 = raw string blob (UTF-8)
-
-    # Parse offset table → extract all strings
+    offsets_raw = mzp.data[0]
+    strings_raw = mzp.data[1]
     offset_count = len(offsets_raw) // 4
     strings = {}
 
@@ -135,46 +178,86 @@ def extract_mrg(mrg_path, txt_path, progress_cb=None):
         if len(d_end_raw) < 4:
             break
         d_end, = struct.unpack(">I", d_end_raw)
-
-        if d_start == d_end:        # empty → marks EOF
+        if d_start == d_end:
             break
         if d_end == 0xFFFFFFFF:
             break
-
-        text = strings_raw[d_start: d_end].decode("utf-8", errors="replace")
-        strings[i] = text
-
+        strings[i] = strings_raw[d_start:d_end].decode("utf-8", errors="replace")
         if progress_cb and i % 5000 == 0:
-            pct = int(i / offset_count * 70)
+            pct = int(i / offset_count * 60)
             progress_cb(pct, f"Parsing strings… {i}/{offset_count}")
 
     total = len(strings)
     if progress_cb:
-        progress_cb(75, f"Writing {total:,} strings to file…")
+        progress_cb(65, "Loading scene map…")
+
+    offset_to_scene, scene_tree, scene_offsets = _load_scene_map()
+    has_map = bool(scene_tree)
+
+    if progress_cb:
+        progress_cb(70, f"Writing {total:,} strings…")
 
     source_name = os.path.basename(mrg_path)
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    timestamp   = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
     with open(txt_path, "w", encoding="utf-8", newline="") as out:
         out.write("# ============================================================\n")
         out.write("# MRG Script Text — Extracted by mrg_tool.py\n")
-        out.write(f"# Source  : {source_name}\n")
+        out.write(f"# Source   : {source_name}\n")
         out.write(f"# Extracted: {timestamp}\n")
-        out.write(f"# Total   : {total:,} strings\n")
+        out.write(f"# Total    : {total:,} strings\n")
         out.write("# ============================================================\n")
         out.write("# EDITING GUIDE\n")
         out.write("#   • Edit the lines between [OFFSET:N] markers freely\n")
         out.write("#   • Do NOT add/remove/reorder [OFFSET:N] header lines\n")
+        out.write("#   • Comment lines starting with # are ignored on repack\n")
         out.write("#   • Keep '#' characters inside strings (game line-break)\n")
-        out.write("#   • \\r\\n in strings = game line break — keep as-is or edit\n")
-        out.write("#   • This file is UTF-8, all languages supported\n")
-        out.write("# ============================================================\n")
-        out.write("\n")
+        out.write("#   • \\r\\n = game line break — keep as-is\n")
+        out.write("#   • UTF-8, all languages supported\n")
+        out.write("# ============================================================\n\n")
 
-        for idx in sorted(strings.keys()):
-            out.write(f"[OFFSET:{idx}]\n")
-            out.write(strings[idx])
-            out.write("\n")
+        if has_map:
+            ROUTE_ORDER = ["Common", "Arcueid", "Ciel", "QA"]
+            written_offsets = set()
+
+            for route in ROUTE_ORDER:
+                if route not in scene_tree:
+                    continue
+                out.write(f"\n# ╔══════════════════════════════════════════════╗\n")
+                out.write(f"# ║  ROUTE: {route:<38}║\n")
+                out.write(f"# ╚══════════════════════════════════════════════╝\n")
+
+                for day, files in scene_tree[route].items():
+                    if day:
+                        out.write(f"\n# ── {route} / {day} {'─'*36}\n")
+                    for fname in files:
+                        sk = (route, day, fname)
+                        offsets = sorted(scene_offsets.get(sk, []))
+                        if not offsets:
+                            continue
+                        out.write(f"\n# SCENE: {fname}\n")
+                        for offset in offsets:
+                            if offset not in strings:
+                                continue
+                            out.write(f"[OFFSET:{offset}]\n")
+                            out.write(strings[offset])
+                            out.write("\n")
+                            written_offsets.add(offset)
+
+            # Any unmapped offsets at the end
+            unmapped = sorted(set(strings.keys()) - written_offsets)
+            if unmapped:
+                out.write("\n# ── UNMAPPED OFFSETS ──\n")
+                for offset in unmapped:
+                    out.write(f"[OFFSET:{offset}]\n")
+                    out.write(strings[offset])
+                    out.write("\n")
+        else:
+            # Fallback: sequential
+            for idx in sorted(strings.keys()):
+                out.write(f"[OFFSET:{idx}]\n")
+                out.write(strings[idx])
+                out.write("\n")
 
     if progress_cb:
         progress_cb(100, f"Done! {total:,} strings → {os.path.basename(txt_path)}")
@@ -210,9 +293,22 @@ def repack_mrg(txt_path, mrg_out_path, progress_cb=None):
     while i + 1 < len(parts):
         idx = int(parts[i])
         content = parts[i + 1]
-        # Strip leading/trailing newline added by extractor (one \n after block)
+        # Strip trailing \n added by extractor (one \n after block)
         if content.endswith("\n"):
             content = content[:-1]
+        # Peel off trailing comment lines AND blank separator lines in one pass.
+        # They alternate (blank \n then # comment …) in organised-export output.
+        # CRITICAL: a whitespace-only game string like "　\r\n" or " \r\n" must
+        # NOT be removed — only lines where the printable content is "" OR the
+        # line (after stripping \r\n) starts with "#".
+        lines = content.splitlines(keepends=True)
+        while lines:
+            raw = lines[-1].replace("\r", "").replace("\n", "")
+            if raw == "" or lines[-1].lstrip("\r\n").startswith("#"):
+                lines.pop()
+            else:
+                break
+        content = "".join(lines)
         strings[idx] = content
         i += 2
 
