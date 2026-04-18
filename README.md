@@ -30,13 +30,18 @@ Kabar baik! Script teks hasil ekstraksi kini telah **berhasil disortir**. Kamu b
 ### Preview Format Teks (.txt)
 Hasil ekstraksi mempertahankan ID Offset agar proses *repacking* tetap presisi dan tidak merusak pointer asli game.
 
-<p align="center">
-  <kbd>
-    <img src="https://i.imgur.com/yALew5y.png" width="450" alt="Preview TXT">
-  </kbd>
+<div align="center">
+  <table style="margin-left: auto; margin-right: auto;">
+    <tr>
+      <td align="center"><b>Struktur File Teks Mentah</b></td>
+    </tr>
+    <tr>
+      <td><img src="https://i.imgur.com/yALew5y.png" width="500" alt="Preview TXT"></td>
+    </tr>
+  </table>
   <br>
   <i>Setiap baris teks dikaitkan dengan offset unik untuk menjamin integritas data.</i>
-</p>
+</div>
 
 ---
 
